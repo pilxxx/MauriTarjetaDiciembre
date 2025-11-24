@@ -4,96 +4,43 @@ namespace TarjetaSube
 {
     public class TarjetaBoletoGratuito : Tarjeta
     {
-        private int viajesGratuitosHoy;
-        private DateTime ultimaFechaViaje;
-        private const int MAX_VIAJES_GRATUITOS_DIA = 2;
+        private int viajesHoy;
+        private DateTime ultimaFecha;
 
-        public TarjetaBoletoGratuito() : base()
+        public TarjetaBoletoGratuito(int idTarjeta = 0) : base(idTarjeta)
         {
-            viajesGratuitosHoy = 0;
-            ultimaFechaViaje = DateTime.MinValue;
+            viajesHoy = 0;
+            ultimaFecha = DateTime.MinValue;
         }
 
-        public decimal CalcularDescuento(decimal monto)
+        public override bool PuedePagarEnHorario(DateTime fechaHora)
         {
-            DateTime hoy = DateTime.Now.Date;
-
-            // Resetear contador si es un nuevo día
-            if (ultimaFechaViaje.Date != hoy)
-            {
-                viajesGratuitosHoy = 0;
-            }
-
-            // Si ya usó los 2 viajes gratuitos del día, cobra precio completo
-            if (viajesGratuitosHoy >= MAX_VIAJES_GRATUITOS_DIA)
-            {
-                return monto;
-            }
-
-            // Viaje gratuito
-            return 0;
-        }
-
-        public bool PuedeViajarGratis()
-        {
-            DateTime hoy = DateTime.Now.Date;
-
-            if (ultimaFechaViaje.Date != hoy)
-            {
-                viajesGratuitosHoy = 0;
-            }
-
-            return viajesGratuitosHoy < MAX_VIAJES_GRATUITOS_DIA;
-        }
-
-        public bool PuedeViajarEnEsteHorario()
-        {
-            DateTime ahora = DateTime.Now;
-            
-            // Verifica si es lunes a viernes
-            if (ahora.DayOfWeek == DayOfWeek.Saturday || ahora.DayOfWeek == DayOfWeek.Sunday)
-            {
+            if (fechaHora.DayOfWeek == DayOfWeek.Saturday || fechaHora.DayOfWeek == DayOfWeek.Sunday)
                 return false;
-            }
-            
-            // Verifica si está entre las 6 y las 22
-            if (ahora.Hour < 6 || ahora.Hour >= 22)
-            {
-                return false;
-            }
-            
-            return true;
+            return fechaHora.Hour >= 6 && fechaHora.Hour < 22;
         }
 
-        public void RegistrarViaje()
+        public override decimal CalcularMontoACobrar(decimal montoBase, bool esTrasbordo)
         {
-            DateTime hoy = DateTime.Now.Date;
+            if (esTrasbordo) return 0m;
 
-            // Resetear contador si es un nuevo día
-            if (ultimaFechaViaje.Date != hoy)
-            {
-                viajesGratuitosHoy = 0;
-            }
+            DateTime hoy = fechaHora.Date;
+            if (ultimaFecha.Date != hoy)
+                viajesHoy = 0;
 
-            viajesGratuitosHoy++;
-            ultimaFechaViaje = DateTime.Now;
+            return viajesHoy < 2 ? 0m : montoBase;
         }
 
-        public void RegistrarViajeGratuito()
+        public override void RegistrarViaje(string lineaColectivo, DateTime fechaHora)
         {
-            RegistrarViaje();
+            base.RegistrarViaje(lineaColectivo, fechaHora);
+            DateTime hoy = fechaHora.Date;
+            if (ultimaFecha.Date != hoy)
+                viajesHoy = 0;
+            viajesHoy++;
+            ultimaFecha = fechaHora;
         }
 
-        public int ObtenerViajesGratuitosHoy()
-        {
-            DateTime hoy = DateTime.Now.Date;
-
-            if (ultimaFechaViaje.Date != hoy)
-            {
-                return 0;
-            }
-
-            return viajesGratuitosHoy;
-        }
+        public override string ToString() => "Boleto Educativo Gratuito";
     }
 }

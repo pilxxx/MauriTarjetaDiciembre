@@ -4,38 +4,57 @@ namespace TarjetaSube
 {
     public class TarjetaMedioBoleto : Tarjeta
     {
-        public TarjetaMedioBoleto() : base()
+        private int viajesMedioHoy;
+        private DateTime ultimaFechaMedio;
+        private DateTime ultimoViaje;
+
+        public TarjetaMedioBoleto(int idTarjeta = 0) : base(idTarjeta)
         {
+            viajesMedioHoy = 0;
+            ultimaFechaMedio = DateTime.MinValue;
+            ultimoViaje = DateTime.MinValue;
         }
 
-        public decimal CalcularDescuento(decimal monto)
+        public override bool PuedePagarEnHorario(DateTime fechaHora)
         {
-            return monto / 2;
-        }
-
-        public bool PuedeViajarEnEsteHorario()
-        {
-            DateTime ahora = DateTime.Now;
-            
-            // verifica si es lunes a viernes
-            if (ahora.DayOfWeek == DayOfWeek.Saturday || ahora.DayOfWeek == DayOfWeek.Sunday)
-            {
+            if (fechaHora.DayOfWeek == DayOfWeek.Saturday || fechaHora.DayOfWeek == DayOfWeek.Sunday)
                 return false;
-            }
-            
-            // verifica si esta entre las 6 y las 22
-            if (ahora.Hour < 6 || ahora.Hour >= 22)
-            {
-                return false;
-            }
-            
-            return true;
+            return fechaHora.Hour >= 6 && fechaHora.Hour < 22;
         }
 
-        public override bool DescontarSaldo(decimal monto)
+        public override decimal CalcularMontoACobrar(decimal montoBase, bool esTrasbordo)
         {
-            bool resultado = base.DescontarSaldo(monto);
-            return resultado;
+            if (esTrasbordo) return 0m;
+
+            DateTime hoy = fechaHora.Date;
+            if (ultimaFechaMedio.Date != hoy)
+                viajesMedioHoy = 0;
+
+            // Regla de los 5 minutos
+            if (ultimoViaje != DateTime.MinValue)
+            {
+                if ((fechaHora - ultimoViaje).TotalMinutes < 5)
+                    return montoBase; // Cobra completo si intenta viajar antes de 5 min
+            }
+
+            return viajesMedioHoy < 2 ? montoBase / 2 : montoBase;
         }
+
+        public override void RegistrarViaje(string lineaColectivo, DateTime fechaHora)
+        {
+            base.RegistrarViaje(lineaColectivo, fechaHora);
+
+            DateTime hoy = fechaHora.Date;
+            if (ultimaFechaMedio.Date != hoy)
+                viajesMedioHoy = 0;
+
+            if (viajesMedioHoy < 2)
+                viajesMedioHoy++;
+
+            ultimoViaje = fechaHora;
+            ultimaFechaMedio = fechaHora;
+        }
+
+        public override string ToString() => "Medio Boleto";
     }
 }

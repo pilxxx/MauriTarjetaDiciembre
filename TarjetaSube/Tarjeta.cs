@@ -5,110 +5,52 @@ namespace TarjetaSube
 {
     public class Tarjeta
     {
+        // Lista de montos permitidos para cargar (única instancia en toda la aplicación)
+        protected static readonly List<decimal> montosPermitidos = new()
+        {
+            2000m, 3000m, 4000m, 5000m, 8000m,
+            10000m, 15000m, 20000m, 25000m, 30000m
+        };
+
+        // Campos de la tarjeta
         protected decimal saldo;
-        private List<decimal> montosPermitidos;
+        protected decimal saldoPendiente;
+        protected readonly int id;
+
         private const decimal LIMITE_NEGATIVO = -1200m;
         private const decimal LIMITE_MAXIMO = 56000m;
-        private decimal saldoPendiente;
 
-        // para boleto de uso frecuente
+        // Uso frecuente (30-59: 20% off, 60-80: 25% off)
         private int viajesDelMes;
-        private DateTime ultimoMesRegistrado;
+        private DateTime ultimoMesRegistrado = DateTime.MinValue;
 
-        private DateTime ultimoViajeParaTrasbordo;
-        private string ultimaLineaViajada;
+        // Trasbordo
+        protected DateTime ultimoViajeParaTrasbordo = DateTime.MinValue;
+        protected string ultimaLineaViajada = "";
 
-        public Tarjeta()
+        public Tarjeta(int idTarjeta = 0)
         {
-            saldo = 0;
-            saldoPendiente = 0;
-            montosPermitidos = new List<decimal> {
-                2000, 3000, 4000, 5000, 8000, 10000, 15000, 20000, 25000, 30000
-            };
+            id = idTarjeta;
+            saldo = 0m;
+            saldoPendiente = 0m;
             viajesDelMes = 0;
-            ultimoMesRegistrado = DateTime.Now;
-            ultimoViajeParaTrasbordo = DateTime.MinValue;
-            ultimaLineaViajada = "";
-        }
-public void RegistrarViajeParaTrasbordo(string lineaColectivo, DateTime fechaHora)
-{
-    ultimaLineaViajada = lineaColectivo;
-}
-
-public bool PuedeHacerTrasbordo(string lineaColectivo, DateTime fechaHora)
-{
-    return false;
-}
-        public decimal ObtenerSaldo()
-        {
-            return saldo;
         }
 
-        public decimal ObtenerSaldoPendiente()
-        {
-            return saldoPendiente;
-        }
+        public int ObtenerId() => id;
+        public decimal ObtenerSaldo() => saldo;
+        public decimal ObtenerSaldoPendiente() => saldoPendiente;
 
-        public int ObtenerViajesDelMes()
-        {
-            DateTime ahora = DateTime.Now;
-
-            // Si cambió el mes, reiniciar contador
-            if (ahora.Month != ultimoMesRegistrado.Month || ahora.Year != ultimoMesRegistrado.Year)
-            {
-                viajesDelMes = 0;
-                ultimoMesRegistrado = ahora;
-            }
-
-
-            return viajesDelMes;
-        }
-
-        public decimal CalcularDescuentoUsoFrecuente(decimal montoBase)
-        {
-            DateTime ahora = DateTime.Now;
-
-            // Verificar si cambió el mes
-            if (ahora.Month != ultimoMesRegistrado.Month || ahora.Year != ultimoMesRegistrado.Year)
-            {
-                viajesDelMes = 0;
-                ultimoMesRegistrado = ahora;
-            }
-
-            // Incrementar contador de viajes
-            viajesDelMes++;
-
-            // Aplicar descuentos según cantidad de viajes
-            if (viajesDelMes >= 1 && viajesDelMes <= 29)
-            {
-                return montoBase; // Tarifa normal
-            }
-            else if (viajesDelMes >= 30 && viajesDelMes <= 59)
-            {
-                return montoBase * 0.80m; // 20% descuento
-            }
-            else if (viajesDelMes >= 60 && viajesDelMes <= 80)
-            {
-                return montoBase * 0.75m; // 25% descuento
-            }
-            else // viaje 81 en adelante
-            {
-                return montoBase; // Tarifa normal
-            }
-        }
-
-        /// carga saldo monto permitido y carga max de 56k, si el saldo es negativo se paga la deuda
-        public bool CargarSaldo(decimal monto)
+        // ===================================================================
+        // CARGAR SALDO
+        // ===================================================================
+        public virtual bool CargarSaldo(decimal monto)
         {
             if (!montosPermitidos.Contains(monto))
-            {
                 return false;
-            }
 
+            // Si hay saldo pendiente, intentar acreditarlo primero
             if (saldoPendiente > 0)
-            {
                 AcreditarCarga();
-            }
 
             decimal nuevoSaldo = saldo + monto;
 
@@ -117,51 +59,124 @@ public bool PuedeHacerTrasbordo(string lineaColectivo, DateTime fechaHora)
                 decimal excedente = nuevoSaldo - LIMITE_MAXIMO;
                 saldo = LIMITE_MAXIMO;
                 saldoPendiente += excedente;
-                return true;
+            }
+            else
+            {
+                saldo = nuevoSaldo;
             }
 
-            saldo = nuevoSaldo;
             return true;
         }
 
-        public void AcreditarCarga()
+        // ===================================================================
+        // ACREDITAR SALDO PENDIENTE (cuando se gasta)
+        // ===================================================================
+        public virtual void AcreditarCarga()
         {
-            if (saldoPendiente > 0)
-            {
-                decimal espacioDisponible = LIMITE_MAXIMO - saldo;
+            if (saldoPendiente <= 0) return;
 
-                if (espacioDisponible > 0)
-                {
-                    if (saldoPendiente <= espacioDisponible)
-                    {
-                        saldo += saldoPendiente;
-                        saldoPendiente = 0;
-                    }
-                    else
-                    {
-                        saldo += espacioDisponible;
-                        saldoPendiente -= espacioDisponible;
-                    }
-                }
+            decimal espacioDisponible = LIMITE_MAXIMO - saldo;
+
+            if (espacioDisponible <= 0) return;
+
+            if (saldoPendiente <= espacioDisponible)
+            {
+                saldo += saldoPendiente;
+                saldoPendiente = 0m;
+            }
+            else
+            {
+                saldo = LIMITE_MAXIMO;
+                saldoPendiente -= espacioDisponible;
             }
         }
+
+        // ===================================================================
+        // DESCONTAR SALDO (virtual para que franquicias lo sobreescriban)
+        // ===================================================================
         public virtual bool DescontarSaldo(decimal monto)
         {
-            decimal saldoResultado = saldo - monto;
+            decimal saldoResultante = saldo - monto;
 
-            if (saldoResultado < LIMITE_NEGATIVO)
-            {
+            if (saldoResultante < LIMITE_NEGATIVO)
                 return false;
-            }
 
-            saldo = saldoResultado;
+            saldo = saldoResultante;
 
+            // Después de gastar, acreditamos saldo pendiente si hay
             if (saldoPendiente > 0)
-            {
                 AcreditarCarga();
-            }
 
             return true;
         }
+
+        // ===================================================================
+        // USO FRECUENTE (solo tarjetas normales)
+        // ===================================================================
+        protected virtual decimal AplicarDescuentoUsoFrecuente(decimal montoBase)
+        {
+            DateTime ahora = DateTime.Now;
+
+            // Reiniciar contador si cambió el mes
+            if (ultimoMesRegistrado == DateTime.MinValue ||
+                ahora.Month != ultimoMesRegistrado.Month ||
+                ahora.Year != ultimoMesRegistrado.Year)
+            {
+                viajesDelMes = 0;
+                ultimoMesRegistrado = ahora;
+            }
+
+            viajesDelMes++;
+
+            if (viajesDelMes >= 30 && viajesDelMes <= 59)
+                return montoBase * 0.80m;   // 20% descuento
+            if (viajesDelMes >= 60 && viajesDelMes <= 80)
+                return montoBase * 0.75m;   // 25% descuento
+
+            return montoBase; // 1-29 y 81+ → tarifa normal
+        }
+
+        // ===================================================================
+        // MÉTODOS VIRTUALES QUE LAS SUBCLASES VAN A SOBREESCRIBIR
+        // ===================================================================
+        public virtual decimal CalcularMontoACobrar(decimal montoBase, bool esTrasbordo)
+        {
+            if (esTrasbordo) return 0m;
+            return AplicarDescuentoUsoFrecuente(montoBase);
+        }
+
+        public virtual bool PuedePagarEnHorario(DateTime fechaHora)
+        {
+            // Tarjeta normal siempre puede pagar
+            return true;
+        }
+
+        public virtual bool PuedeHacerTrasbordo(string lineaColectivo, DateTime fechaHora)
+        {
+            if (ultimoViajeParaTrasbordo == DateTime.MinValue)
+                return false;
+
+            TimeSpan diferencia = fechaHora - ultimoViajeParaTrasbordo;
+
+            bool dentroDeUnaHora = diferencia.TotalMinutes <= 60;
+            bool lineaDistinta = !string.Equals(lineaColectivo, ultimaLineaViajada, StringComparison.OrdinalIgnoreCase);
+            bool diaValido = fechaHora.DayOfWeek >= DayOfWeek.Monday && fechaHora.DayOfWeek <= DayOfWeek.Saturday;
+            bool horarioTrasbordo = fechaHora.Hour >= 7 && fechaHora.Hour < 22;
+
+            return dentroDeUnaHora && lineaDistinta && diaValido && horarioTrasbordo;
+        }
+
+        public virtual void RegistrarViaje(string lineaColectivo, DateTime fechaHora)
+        {
+            ultimoViajeParaTrasbordo = fechaHora;
+            ultimaLineaViajada = lineaColectivo;
+        }
+
+        // ===================================================================
+        // Para debugging / tests
+        // ===================================================================
+        public int ObtenerViajesDelMes() => viajesDelMes;
+        public DateTime ObtenerUltimoViajeTrasbordo() => ultimoViajeParaTrasbordo;
+        public string ObtenerUltimaLinea() => ultimaLineaViajada;
     }
 }
